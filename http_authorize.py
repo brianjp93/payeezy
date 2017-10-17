@@ -51,9 +51,9 @@ class PayeezyHTTPAuthorize(object):
     def getTokenPostCall(self, payload):
         response = requests.Session()
         response.mount('https://', MyAdapter())
-        self.payload = json.dumps(payload)
-        authorizationVal = self.generateHMACAuthenticationHeader(payload=self.payload)
-        result = response.post(self.tokenURL, headers={'User-Agent':'Payeezy-Python','content-type': 'application/json','apikey':self.apikey,'token':self.token,'Authorization':'xxxxx'}, data=self.payload)
+        # self.payload = json.dumps(payload)
+        # authorizationVal = self.generateHMACAuthenticationHeader(payload=self.payload)
+        result = response.get(self.tokenurl, headers={'User-Agent':'Payeezy-Python','content-type': 'application/json'}, params=payload)
         return result
             
     #Generic method to make calls for primary transactions
@@ -64,6 +64,9 @@ class PayeezyHTTPAuthorize(object):
         authorizationVal = self.generateHMACAuthenticationHeader(payload=self.payload)
         result = response.post(self.url, headers={'User-Agent':'Payeezy-Python','content-type': 'application/json','apikey':self.apikey,'token':self.token,'nonce':self.nonce,'timestamp':self.timestamp,'Authorization':authorizationVal}, data=self.payload)
         return result
+
+    # def makeTokenBasedPostCall(self, payload):
+    #     response = requests.Session()
 
 
     #Generic method to make calls for secondary transactions

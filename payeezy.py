@@ -20,7 +20,7 @@ from . import http_authorize
 
 class Payeezy(object):
 
-    def __init__(self, api_key, api_secret, token, url, token_url):
+    def __init__(self, api_key, api_secret, token, url, token_url, js_security_key=None):
         """Initialize Payeezy object.
 
         Parameters
@@ -42,6 +42,7 @@ class Payeezy(object):
         self.token = token
         self.url = url
         self.token_url = token_url
+        self.js_security_key = js_security_key
 
     def make_payload(self, amount=None, currency_code=None, card_type=None,
         cardholder_name=None, card_number=None, card_expiry=None,
@@ -155,7 +156,7 @@ class Payeezy(object):
         token_type='FDToken', card_type=None, cardholder_name=None,
         card_number=None, exp_date=None, cvv=None, city=None,
         country=None, email=None, phone_type=None, phone_number=None,
-        street=None, state=None, zip_code=None, js_security_key=None,
+        street=None, state=None, zip_code=None,
         ):
         """Make the token data dictionary for the get request.
 
@@ -179,7 +180,6 @@ class Payeezy(object):
         street : str, optional
         state : str, optional
         zip_code : str, optional
-        js_security_key : str, required
         
         Returns
         -------
@@ -203,8 +203,6 @@ class Payeezy(object):
             raise ValueError('card_type cannot be None. Allowed: {}'.format(allowed_cards))
         if cardholder_name is None:
             raise ValueError('cardholder_name cannot be None.')
-        if js_security_key is None:
-            raise ValueError('js_security_key cannot be None.')
         if card_number is None:
             raise ValueError('card_number cannot be None.')
         card_number = str(card_number)
@@ -215,44 +213,84 @@ class Payeezy(object):
             raise ValueError('cvv cannot be None.')
         cvv = str(cvv)
 
-        billing_address = {
-            'phone': {}
+        payload = {
+            'apikey': self.api_key,
+            'type': token_type,
+            'js_security_key': self.js_security_key,
+            'ta_token': ta_token,
+            'credit_card.type': card_type,
+            'credit_card.cardholder_name' : cardholder_name,
+            'credit_card.card_number': card_number,
+            'credit_card.exp_date': exp_date,
+            'credit_card.cvv': cvv,
         }
-
         if city is not None:
-            billing_address['city'] = city
+            payload['billing_address.city'] = city
         if country is not None:
-            billing_address['country'] = country
+            payload['billing_address.country'] = country
         if email is not None:
-            billing_address['email'] = email
+            payload['billing_address.email'] = email
         if phone_type is not None:
-            billing_address['phone']['type'] = phone_type
+            payload['billing_address.phone.type'] = phone_type
         if phone_number is not None:
-            phone_number = str(phone_number)
-            billing_address['phone']['number'] = phone_number
+            payload['billing_address.phone.number'] = phone_number
         if street is not None:
-            billing_address['street'] = street
+            payload['billing_address.street'] = street
         if state is not None:
-            billing_address['state_providence'] = state
+            payload['billing_address.state_providence'] = state
         if zip_code is not None:
-            zip_code = str(zip_code)
-            billing_address['zip_postal_code'] = zip_code
+            payload['billing_address.zip_postal_code'] = zip_code
+
+        return payload
+
+    def make_token_transaction_payload(self, method='token', transaction_type=None,
+        merchant_ref=None, amount=None, currency_code=None,
+        token_type='FDToken', token_data_value=None,
+        token_data_type=None, token_data_cardholder_name=None,
+        token_data_exp_date=None,
+        ):
+        """
+        """
+        if merchant_ref is None:
+            merchant_ref = ''
+        if transaction_type is None:
+            raise ValueError('transaction_type cannot be None.')
+        if amount is None:
+            raise ValueError('value cannot be None.')
+        amount = str(amount)
+        if currency_code is None:
+            raise ValueError('currency_code cannot be None')
+        currency_code = currency_code.upper()
+        if token_data_value is None:
+            raise ValueError('token_data_value cannot be None')
+        token_data_value = str(token_data_value)
+        if token_data_type is None:
+            raise ValueError('token_data_type cannot be None')
+        if token_data_cardholder_name is None:
+            raise ValueError('token_data_cardholder_name cannot be None')
+        if token_data_exp_date is None:
+            raise ValueError('token_data_exp_date cannot be None')
+        token_data_exp_date = str(token_data_exp_date)
 
         payload = {
-            'type': token_type,
-            'js_security_key': js_security_key,
-            'ta_token': ta_token,
-            'credit_card': {
-                'type': card_type,
-                'cardholder_name': cardholder_name,
-                'card_number': card_number,
-                'exp_date': exp_date,
-                'cvv': cvv,
-            },
-            'billing_address': billing_address
+            'merchant_ref': merchant_ref,
+            'method': method,
+            'transaction_type': transaction_type,
+            'amount': amount,
+            'currency_code': currency_code,
+            'token': {
+                'token_type': token_type,
+                'token_data': {
+                    'value': token_data_value,
+                    'type': token_data_type,
+                    'cardholder_name': token_data_cardholder_name,
+                    'exp_date': token_data_exp_date
+                }
+            }
         }
 
         return payload
+
 
     def make_primary_transaction(self, payload):
         auth = http_authorize.PayeezyHTTPAuthorize(
@@ -368,7 +406,44 @@ class Payeezy(object):
         )
         return r
 
-    def get_token(self):
+    def get_token(self, ta_token=None, callback=None,
+        token_type='FDToken', card_type=None, cardholder_name=None,
+        card_number=None, exp_date=None, cvv=None, city=None,
+        country=None, email=None, phone_type=None, phone_number=None,
+        street=None, state=None, zip_code=None,):
+        """Get a multi-use token for a credit card.
+
+        Same parameters as `Payeezy.make_token_payload`
+        Don't need to initialize an instance of http_authorization.PayeezyHTTPAuthorize
+        """
+        payload = self.make_token_payload(ta_token=ta_token,
+            callback=callback, token_type=token_type, card_type=card_type,
+            cardholder_name=cardholder_name, card_number=card_number,
+            exp_date=exp_date, cvv=cvv, city=city, country=country,
+            email=email, phone_type=phone_type, phone_number=phone_number,
+            street=street, state=state, zip_code=zip_code,
+        )
+        r = requests.get(self.token_url, params=payload)
+        return r
+
+    def token_transaction(self, method='token', transaction_type='authorize',
+        merchant_ref=None, amount=None, currency_code=None,
+        token_type='FDToken', token_data_value=None,
+        token_data_type=None, token_data_cardholder_name=None,
+        token_data_exp_date=None,):
         """
         """
-        pass
+        payload = self.make_token_transaction_payload(
+            method=method, transaction_type=transaction_type,
+            merchant_ref=merchant_ref, amount=amount, currency_code=currency_code,
+            token_type=token_type, token_data_value=token_data_value,
+            token_data_type=token_data_type,
+            token_data_cardholder_name=token_data_cardholder_name,
+            token_data_exp_date=token_data_exp_date
+        )
+
+        auth = http_authorize.PayeezyHTTPAuthorize(
+            self.api_key, self.api_secret, self.token, self.url, self.token_url
+        )
+        r = auth.makeCardBasedTransactionPostCall(payload)
+        return r
